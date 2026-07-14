@@ -1,0 +1,376 @@
+<!DOCTYPE html>
+<html lang="uk">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+<title>Нова заявка на оплату</title>
+<script src="https://telegram.org/js/telegram-web-app.js"></script>
+<style>
+  :root {
+    --bg: var(--tg-theme-bg-color, #ffffff);
+    --secondary-bg: var(--tg-theme-secondary-bg-color, #f1f3f5);
+    --text: var(--tg-theme-text-color, #1c1c1e);
+    --hint: var(--tg-theme-hint-color, #8e8e93);
+    --accent: var(--tg-theme-button-color, #2481cc);
+    --field-bg: var(--tg-theme-section-bg-color, #ffffff);
+    --danger: #d9534f;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    background: var(--secondary-bg);
+    color: var(--text);
+    font: 16px/1.45 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    padding: 12px 12px 24px;
+  }
+  .card {
+    background: var(--field-bg);
+    border-radius: 14px;
+    padding: 16px;
+    margin-bottom: 12px;
+  }
+  .title {
+    font-size: 17px; font-weight: 600; margin-bottom: 4px;
+    display: flex; align-items: center; gap: 8px;
+  }
+  .subtitle { font-size: 13px; color: var(--hint); margin-bottom: 4px; }
+  label {
+    display: block; font-size: 13px; color: var(--hint);
+    margin: 14px 0 5px;
+  }
+  label .req { color: var(--danger); }
+  input[type="text"], select, textarea {
+    width: 100%;
+    background: var(--secondary-bg);
+    color: var(--text);
+    border: 1px solid transparent;
+    border-radius: 10px;
+    padding: 11px 12px;
+    font: inherit;
+    outline: none;
+    appearance: none;
+    -webkit-appearance: none;
+  }
+  input:focus, select:focus, textarea:focus { border-color: var(--accent); }
+  textarea { resize: vertical; min-height: 64px; }
+  .row { display: flex; gap: 10px; }
+  .row > div { flex: 1; }
+  .row > .narrow { flex: 0 0 108px; }
+  .seg {
+    display: flex; gap: 8px; flex-wrap: wrap;
+  }
+  .seg button {
+    flex: 1; min-width: 90px;
+    background: var(--secondary-bg);
+    color: var(--text);
+    border: 1.5px solid transparent;
+    border-radius: 10px;
+    padding: 10px 8px;
+    font: inherit; font-size: 15px;
+    cursor: pointer;
+  }
+  .seg button.active {
+    border-color: var(--accent);
+    color: var(--accent);
+    font-weight: 600;
+  }
+  .footnote { font-size: 12px; color: var(--hint); text-align: center; margin-top: 10px; }
+  .err { font-size: 12px; color: var(--danger); margin-top: 4px; display: none; }
+  select { background-image: linear-gradient(45deg, transparent 50%, var(--hint) 50%), linear-gradient(135deg, var(--hint) 50%, transparent 50%);
+    background-position: calc(100% - 18px) 50%, calc(100% - 13px) 50%;
+    background-size: 5px 5px; background-repeat: no-repeat; padding-right: 32px; }
+  .schedule { border-radius: 10px; padding: 10px 12px; margin: 12px 0 4px;
+    font-size: 13px; line-height: 1.45; font-weight: 600; }
+  .schedule.ok   { background: #e8f5e9; color: #1b5e20; }
+  .schedule.warn { background: #fff8e1; color: #6d5300; }
+  .schedule.late { background: #eceff1; color: #546e7a; }
+</style>
+</head>
+<body>
+
+<div class="card">
+  <div class="title">📄 Нова заявка на оплату</div>
+  <div class="subtitle">Заповни всі обовʼязкові поля — і знизу зʼявиться кнопка «Надіслати».</div>
+
+  <div id="schedule" class="schedule"></div>
+
+  <label>Звідки платимо <span class="req">*</span></label>
+  <select id="organization"></select>
+
+  <label>Кому платимо <span class="req">*</span></label>
+  <input type="text" id="payee" placeholder="Назва компанії або ФОП" maxlength="120">
+
+  <label>Спосіб оплати <span class="req">*</span></label>
+  <select id="payMethod">
+    <option value="account" selected>Переказ за рахунком (IBAN)</option>
+    <option value="card">Переказ на карту</option>
+    <option value="cash">Готівка в руки</option>
+  </select>
+  <div id="reqBox">
+    <label>Реквізити <span class="req">*</span></label>
+    <input type="text" id="requisites" placeholder="UA00 0000 0000 0000 0000 0000 0000 0" maxlength="40">
+    <div class="footnote" style="text-align:left;margin-top:4px" id="reqHint"></div>
+  </div>
+
+  <div class="row">
+    <div>
+      <label>Сума <span class="req">*</span></label>
+      <input type="text" id="amount" inputmode="decimal" placeholder="0.00">
+      <div class="err" id="amountErr">Введи число більше нуля, напр. 15000 або 15 000,50</div>
+    </div>
+    <div class="narrow">
+      <label>Валюта <span class="req">*</span></label>
+      <select id="currency">
+        <option>UAH</option><option>USD</option><option>EUR</option>
+      </select>
+    </div>
+  </div>
+
+  <label>Місяць нарахування <span class="req">*</span></label>
+  <select id="month"></select>
+
+  <label>Напрям <span class="req">*</span></label>
+  <div class="seg" id="direction">
+    <button type="button" data-v="B2B">B2B</button>
+    <button type="button" data-v="B2C">B2C</button>
+    <button type="button" data-v="Міжнародка">Міжнародка</button>
+    <button type="button" data-v="Казахстан">Казахстан</button>
+    <button type="button" data-v="Загальні">Загальні</button>
+  </div>
+
+  <label>Призначення платежу <span class="req">*</span></label>
+  <textarea id="purpose" placeholder="За що платимо?" maxlength="500"></textarea>
+
+  <div class="check-row" style="display:flex;align-items:center;gap:10px;margin-top:14px">
+    <input type="checkbox" id="recurring" style="width:20px;height:20px;accent-color:var(--accent);flex:none">
+    <span style="font-size:14px">🔁 Повторюваний платіж<br>
+      <span style="font-size:12px;color:var(--hint)">бот нагадає напередодні наступної оплати і попросить підтвердити</span></span>
+  </div>
+  <div id="recBox" style="display:none">
+    <label>Періодичність</label>
+    <select id="recPeriod">
+      <option value="month" selected>Щомісяця</option>
+      <option value="week">Щотижня</option>
+      <option value="manual">Вказую дату щоразу вручну</option>
+    </select>
+    <label>Дата наступної оплати <span class="req">*</span></label>
+    <input type="date" id="recDate">
+    <div class="footnote" style="text-align:left;margin-top:6px" id="recHint">
+      далі даты рахуватимуться автоматично від цієї</div>
+  </div>
+
+  <div class="footnote">Скан рахунку (PDF/фото) бот попросить наступним повідомленням ↗</div>
+</div>
+
+<script>
+  // ───── налаштування (редагуються тут, мають збігатися з approval_config.json) ─────
+  const ORGS = ["ФОП", "ТОВ"];
+  const DEFAULT_ORG = "ФОП";
+  const MONTHS_BACK = 11; // скільки попередніх місяців показувати у списку
+
+  const tg = window.Telegram.WebApp;
+  tg.ready();
+  tg.expand();
+
+  // ───── плашка регламенту (за київським часом, незалежно від поясу пристрою) ─────
+  function renderSchedule() {
+    const el = document.getElementById("schedule");
+    if (!el) return;
+    // поточний час у Києві: беремо UTC і застосовуємо зсув Києва
+    const now = new Date();
+    const kyiv = new Date(now.toLocaleString("en-US", { timeZone: "Europe/Kyiv" }));
+    const mins = kyiv.getHours() * 60 + kyiv.getMinutes();
+    const dow = kyiv.getDay(); // 0 = неділя, 6 = субота
+    const weekend = (dow === 0 || dow === 6);
+
+    if (weekend) {
+      el.className = "schedule late";
+      el.innerHTML = "🕒 Вихідний — заявки опрацюються в найближчий робочий день.";
+    } else if (mins < 13 * 60 + 30) {
+      el.className = "schedule ok";
+      el.innerHTML = "✅ Заявки приймаються <b>до 13:30</b>. Оплати здійснюються після 15:00.";
+    } else if (mins < 14 * 60) {
+      el.className = "schedule warn";
+      el.innerHTML = "⚠️ Приймання завершується — <b>до 14:00</b>. Встигни надіслати!";
+    } else {
+      el.className = "schedule late";
+      el.innerHTML = "🕒 Приймання на сьогодні завершено. Нові заявки опрацюються завтра.";
+    }
+  }
+  renderSchedule();
+  setInterval(renderSchedule, 30000); // оновлювати щопів хвилини, поки форма відкрита
+
+  const MONTHS_UA = ["Січень","Лютий","Березень","Квітень","Травень","Червень",
+                     "Липень","Серпень","Вересень","Жовтень","Листопад","Грудень"];
+
+  // організації
+  const orgSel = document.getElementById("organization");
+  ORGS.forEach(o => {
+    const opt = new Option(o, o, o === DEFAULT_ORG, o === DEFAULT_ORG);
+    orgSel.add(opt);
+  });
+
+  // місяці: поточний (за замовчуванням) + попередні
+  const monthSel = document.getElementById("month");
+  const now = new Date();
+  for (let i = 0; i <= MONTHS_BACK; i++) {
+    const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
+    const key = String(d.getMonth() + 1).padStart(2, "0") + "." + d.getFullYear();
+    const label = MONTHS_UA[d.getMonth()] + " " + d.getFullYear() + (i === 0 ? " — поточний" : "");
+    monthSel.add(new Option(label, key, i === 0, i === 0));
+  }
+
+  // сегмент напряму
+  let direction = null;
+
+  function bindSeg(containerId, onPick) {
+    const box = document.getElementById(containerId);
+    box.querySelectorAll("button").forEach(btn => {
+      btn.addEventListener("click", () => {
+        box.querySelectorAll("button").forEach(b => b.classList.remove("active"));
+        btn.classList.add("active");
+        onPick(btn.dataset.v);
+        validate();
+      });
+    });
+  }
+  bindSeg("direction", v => { direction = v; });
+
+  // сума
+  function parseAmount(raw) {
+    raw = (raw || "").trim();
+    if (!/^[\d\s.,]+$/.test(raw)) return null;
+    raw = raw.replace(/[\s\u00a0]/g, "");
+    if (raw.includes(",") && raw.includes(".")) raw = raw.replace(/,/g, "");
+    else raw = raw.replace(",", ".");
+    const v = parseFloat(raw);
+    return (isFinite(v) && v > 0) ? v : null;
+  }
+
+  const fields = ["payee", "amount", "purpose"].map(id => document.getElementById(id));
+  fields.forEach(f => f.addEventListener("input", validate));
+  document.getElementById("amount").addEventListener("input", () => {
+    const bad = document.getElementById("amount").value.trim() !== "" &&
+                parseAmount(document.getElementById("amount").value) === null;
+    document.getElementById("amountErr").style.display = bad ? "block" : "none";
+  });
+
+  function formData() {
+    return {
+      organization: orgSel.value,
+      payee: document.getElementById("payee").value.trim(),
+      amount: parseAmount(document.getElementById("amount").value),
+      currency: document.getElementById("currency").value,
+      accrual_month: monthSel.value,
+      direction: direction,
+      purpose: document.getElementById("purpose").value.trim(),
+      pay_method: pmSel.value,
+      requisites: pmSel.value === "cash" ? "" : reqInp.value.replace(/\s/g, ""),
+      recurring: recChk.checked
+        ? { period: recPeriod.value, next_date: recDate.value }
+        : null,
+    };
+  }
+
+  const recChk = document.getElementById("recurring");
+  const recBox = document.getElementById("recBox");
+  const recPeriod = document.getElementById("recPeriod");
+  const recDate = document.getElementById("recDate");
+  recChk.addEventListener("change", () => {
+    recBox.style.display = recChk.checked ? "block" : "none";
+    if (recChk.checked && !recDate.value) {
+      // дефолт: сьогодні + місяць
+      const d = new Date(); d.setMonth(d.getMonth() + 1);
+      recDate.value = d.toISOString().slice(0, 10);
+    }
+    validate();
+  });
+  recPeriod.addEventListener("change", () => {
+    document.getElementById("recHint").textContent =
+      recPeriod.value === "manual"
+        ? "після кожного платежу бот запитає дату наступного"
+        : "далі дати рахуватимуться автоматично від цієї";
+    validate();
+  });
+  recDate.addEventListener("change", validate);
+
+  function recValid() {
+    if (!recChk.checked) return true;
+    if (!recDate.value) return false;
+    return recDate.value >= new Date().toISOString().slice(0, 10);
+  }
+
+  const pmSel = document.getElementById("payMethod");
+  const reqBox = document.getElementById("reqBox");
+  const reqInp = document.getElementById("requisites");
+  const reqHint = document.getElementById("reqHint");
+
+  function ibanOk(raw) {
+    const s = raw.replace(/\s/g, "").toUpperCase();
+    if (!/^UA\d{27}$/.test(s) && !/^KZ[0-9A-Z]{18}$/.test(s)) return false;
+    // mod-97: перші 4 символи в кінець, літери → числа, залишок має бути 1
+    const rearranged = s.slice(4) + s.slice(0, 4);
+    let rem = 0;
+    for (const ch of rearranged) {
+      const v = /[A-Z]/.test(ch) ? String(ch.charCodeAt(0) - 55) : ch;
+      for (const digit of v) rem = (rem * 10 + Number(digit)) % 97;
+    }
+    return rem === 1;
+  }
+  function cardOk(raw) {
+    const s = raw.replace(/[\s-]/g, "");
+    if (!/^\d{16,19}$/.test(s)) return false;
+    // Луна: контрольна сума ловить одруківки
+    let sum = 0, dbl = false;
+    for (let i = s.length - 1; i >= 0; i--) {
+      let d = Number(s[i]);
+      if (dbl) { d *= 2; if (d > 9) d -= 9; }
+      sum += d; dbl = !dbl;
+    }
+    return sum % 10 === 0;
+  }
+  function reqValid() {
+    const m = pmSel.value;
+    if (m === "cash") return true;
+    const v = reqInp.value.trim();
+    if (!v) return false;
+    return m === "account" ? ibanOk(v) : cardOk(v);
+  }
+  function refreshReqUi() {
+    const m = pmSel.value;
+    reqBox.style.display = m === "cash" ? "none" : "block";
+    if (m === "account") {
+      reqInp.placeholder = "UA00 0000 0000 0000 0000 0000 0000 0";
+      reqHint.textContent = "IBAN: UA (29 симв.) або KZ (20 симв.), пробіли можна";
+    } else if (m === "card") {
+      reqInp.placeholder = "0000 0000 0000 0000";
+      reqHint.textContent = "номер карти: 16–19 цифр, пробіли можна";
+    }
+    const v = reqInp.value.trim();
+    reqInp.style.borderColor = (m !== "cash" && v && !reqValid()) ? "var(--danger)" : "";
+  }
+  pmSel.addEventListener("change", () => { refreshReqUi(); validate(); });
+  reqInp.addEventListener("input", () => { refreshReqUi(); validate(); });
+  refreshReqUi();
+
+  function isValid(d) {
+    return d.payee.length >= 2 && d.amount !== null &&
+           d.direction !== null && d.purpose.length >= 3 && recValid() && reqValid();
+  }
+
+  function validate() {
+    const ok = isValid(formData());
+    tg.MainButton.setText("🚀 Надіслати на погодження");
+    if (ok) tg.MainButton.show(), tg.MainButton.enable();
+    else tg.MainButton.hide();
+  }
+
+  tg.MainButton.onClick(() => {
+    const d = formData();
+    if (!isValid(d)) return;
+    tg.sendData(JSON.stringify(d));   // → бот отримає web_app_data і попросить файл
+  });
+
+  validate();
+</script>
+</body>
+</html>
