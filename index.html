@@ -103,11 +103,12 @@
   <select id="payMethod">
     <option value="account" selected>Переказ за рахунком (IBAN)</option>
     <option value="card">Переказ на карту</option>
+    <option value="link">Оплата за посиланням</option>
     <option value="cash">Готівка в руки</option>
   </select>
   <div id="reqBox">
     <label>Реквізити <span class="req">*</span></label>
-    <input type="text" id="requisites" placeholder="UA00 0000 0000 0000 0000 0000 0000 0" maxlength="40">
+    <input type="text" id="requisites" placeholder="UA00 0000 0000 0000 0000 0000 0000 0" maxlength="300">
     <div class="footnote" style="text-align:left;margin-top:4px" id="reqHint"></div>
   </div>
 
@@ -130,13 +131,13 @@
 
   <label>Напрям <span class="req">*</span></label>
   <div class="seg" id="direction">
-    <button type="button" data-v="B2B">B2B</button>
-    <button type="button" data-v="B2C">B2C</button>
+    <button type="button" data-v="UA B2B">UA B2B</button>
+    <button type="button" data-v="UA B2C">UA B2C</button>
     <button type="button" data-v="Міжнародка">Міжнародка</button>
     <button type="button" data-v="Казахстан">Казахстан</button>
-    <button type="button" data-v="Загальні">Загальні</button>
     <button type="button" data-v="Офіс">Офіс</button>
     <button type="button" data-v="Склад">Склад</button>
+    <button type="button" data-v="Загальні">Загальні</button>
   </div>
 
   <label>Призначення платежу <span class="req">*</span></label>
@@ -266,7 +267,9 @@
       direction: direction,
       purpose: document.getElementById("purpose").value.trim(),
       pay_method: pmSel.value,
-      requisites: pmSel.value === "cash" ? "" : reqInp.value.replace(/\s/g, ""),
+      requisites: pmSel.value === "cash" ? ""
+                 : pmSel.value === "link" ? reqInp.value.trim()
+                 : reqInp.value.replace(/\s/g, ""),
       recurring: recChk.checked
         ? { period: recPeriod.value, next_date: recDate.value }
         : null,
@@ -330,12 +333,18 @@
     }
     return sum % 10 === 0;
   }
+  function linkOk(raw) {
+    const s = raw.trim();
+    return /^https:\/\/[^\s\/]+\.[^\s\/]{2,}[^\s]*$/.test(s) && s.length <= 300;
+  }
   function reqValid() {
     const m = pmSel.value;
     if (m === "cash") return true;
     const v = reqInp.value.trim();
     if (!v) return false;
-    return m === "account" ? ibanOk(v) : cardOk(v);
+    if (m === "account") return ibanOk(v);
+    if (m === "card") return cardOk(v);
+    return linkOk(v);
   }
   function refreshReqUi() {
     const m = pmSel.value;
@@ -346,6 +355,9 @@
     } else if (m === "card") {
       reqInp.placeholder = "0000 0000 0000 0000";
       reqHint.textContent = "номер карти: 16–19 цифр, пробіли можна";
+    } else if (m === "link") {
+      reqInp.placeholder = "https://…";
+      reqHint.textContent = "посилання на оплату: має починатися з https://";
     }
     const v = reqInp.value.trim();
     reqInp.style.borderColor = (m !== "cash" && v && !reqValid()) ? "var(--danger)" : "";
